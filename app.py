@@ -3,19 +3,16 @@ import streamlit as st
 import httpx
 import os
 
-# Adresse til Flask API'en
 API_URL = os.environ.get("API_URL", "http://127.0.0.1:5000")
 
 st.title("Fredagsbarens event system")
 
-# Gem brugerens navn mellem klik
 if "name" not in st.session_state:
     st.session_state["name"] = ""
 
 name = st.sidebar.text_input("Dit navn", key="name")
 
 
-# Hent alle events fra API'en
 try:
     response = httpx.get(f"{API_URL}/events", timeout=2.0)
     response.raise_for_status()
@@ -38,7 +35,6 @@ except httpx.HTTPStatusError as error:
     st.stop()
 
 
-# Vis alle events i en tabel
 st.subheader("Kommende events")
 
 event_oversigt = []
@@ -53,8 +49,6 @@ for event in events:
 
 st.dataframe(event_oversigt, hide_index=True)
 
-
-# Vælg et event
 st.subheader("Tilmelding og afmelding")
 
 if events:
@@ -66,7 +60,6 @@ if events:
         )
     )
 
-    # Find det valgte event
     selected_event = None
 
     for event in events:
@@ -80,7 +73,6 @@ if events:
     ledige_pladser = selected_event["capacity"] - len(selected_event["participants"])
     st.write(f"**Ledige pladser:** {ledige_pladser}")
 
-    # Tilmeld en deltager
     if st.button("Tilmeld", disabled=ledige_pladser <= 0):
 
         if not name.strip():
@@ -107,7 +99,6 @@ if events:
             except httpx.RequestError:
                 st.error("Kunne ikke forbinde til API'en.")
 
-    # Afmeld en deltager
     if st.button("Afmeld"):
 
         if not name.strip():
@@ -137,12 +128,10 @@ else:
     st.info("Der er ingen events endnu.")
 
 
-# Vis besked efter tilmelding eller afmelding
 if "message" in st.session_state:
     st.success(st.session_state.pop("message"))
 
 
-# Opret et nyt event
 st.subheader("Opret nyt event")
 
 with st.form("create_event_form"):
