@@ -1,0 +1,176 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Fredagsbar API",
+    "version": "1.0.0",
+    "description": "Dokumentation af api.py. Events gemmes i hukommelsen. title, date og name kontrolleres kun for Python-truthiness, ikke for datatype eller datoformat. Derfor har disse felter bevidst ingen typebegrænsning i skemaerne. Eksemplerne viser den forventede brug med tekst. Ukendte felter i request bodies ignoreres."
+  },
+  "paths": {
+    "/events": {
+      "get": {
+        "operationId": "get_events",
+        "summary": "Hent alle events",
+        "responses": {
+          "200": {
+            "description": "Alle events, eventuelt en tom liste.",
+            "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/Event" } } } }
+          }
+        }
+      },
+      "post": {
+        "operationId": "create_event",
+        "summary": "Opret et event",
+        "description": "id bliver det højeste eksisterende id plus 1, eller 1 hvis listen er tom. participants starter som en tom liste. Manglende, ugyldig eller ikke-JSON body behandles som et tomt objekt og giver 400. Et ikke-tomt JSON-array eller en sand scalar kan give en ubehandlet serverfejl, da koden kalder .get() direkte.",
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CreateEvent" }, "example": { "title": "Quizaften", "date": "2026-11-13", "capacity": 3 } } }
+        },
+        "responses": {
+          "201": {
+            "description": "Det oprettede event.",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Event" } } }
+          },
+          "400": {
+            "description": "title eller date er falsk i Python, eller capacity er ikke et positivt heltal. Boolean accepteres ikke som capacity.",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" }, "example": { "error": "Titel, dato og et positivt heltal for antal pladser er påkrævet" } } }
+          }
+        }
+      }
+    },
+    "/events/{id}": {
+      "parameters": [{ "$ref": "#/components/parameters/EventId" }],
+      "get": {
+        "operationId": "get_event",
+        "summary": "Hent et event",
+        "responses": {
+          "200": {
+            "description": "Det fundne event.",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Event" } } }
+          },
+          "404": { "$ref": "#/components/responses/EventNotFound" }
+        }
+      },
+      "delete": {
+        "operationId": "delete_event",
+        "summary": "Slet et event",
+        "responses": {
+          "204": { "description": "Eventet er slettet. Tom response body." },
+          "404": { "$ref": "#/components/responses/EventNotFound" }
+        }
+      }
+    },
+    "/events/{id}/signups": {
+      "parameters": [{ "$ref": "#/components/parameters/EventId" }],
+      "post": {
+        "operationId": "signup_event",
+        "summary": "Tilmeld en deltager",
+        "description": "name valideres før opslag af eventet. Dublet kontrolleres før kapacitet. Manglende, ugyldig eller ikke-JSON body behandles som et tomt objekt og giver 400. Et ikke-tomt JSON-array eller en sand scalar kan give en ubehandlet serverfejl, da koden kalder .get() direkte.",
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Signup" }, "example": { "name": "Anna" } } }
+        },
+        "responses": {
+          "201": {
+            "description": "Det opdaterede event med deltageren tilføjet.",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Event" } } }
+          },
+          "400": {
+            "description": "name mangler eller er falsk i Python.",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" }, "example": { "error": "Navn er påkrævet" } } }
+          },
+          "404": { "$ref": "#/components/responses/EventNotFound" },
+          "409": {
+            "description": "Personen er allerede tilmeldt, eller eventet er fuldt.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" },
+                "examples": {
+                  "alreadySignedUp": { "value": { "error": "Personen er allerede tilmeldt" } },
+                  "full": { "value": { "error": "Eventet er fuldt" } }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/events/{id}/signups/{name}": {
+      "parameters": [
+        { "$ref": "#/components/parameters/EventId" },
+        { "name": "name", "in": "path", "required": true, "description": "Deltagerens navn. Matches præcist og med forskel på store og små bogstaver. Flask-konverteren accepterer ét ikke-tomt stisegment uden skråstreg.", "schema": { "type": "string", "minLength": 1 } }
+      ],
+      "delete": {
+        "operationId": "delete_signup",
+        "summary": "Fjern en tilmelding",
+        "responses": {
+          "204": { "description": "Tilmeldingen er fjernet. Tom response body." },
+          "404": {
+            "description": "Eventet findes ikke, eller personen er ikke tilmeldt.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" },
+                "examples": {
+                  "eventNotFound": { "value": { "error": "Eventet findes ikke" } },
+                  "notSignedUp": { "value": { "error": "Personen er ikke tilmeldt" } }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "parameters": {
+      "EventId": {
+        "name": "id",
+        "in": "path",
+        "required": true,
+        "description": "Eventets id. Flask-ruten matcher ikke-negative heltal. Stier, der ikke matcher konverteren, giver Flasks almindelige HTML-404 i stedet for API'ets JSON-fejl.",
+        "schema": { "type": "integer", "minimum": 0 },
+        "example": 1
+      }
+    },
+    "responses": {
+      "EventNotFound": {
+        "description": "Intet event har det angivne id.",
+        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" }, "example": { "error": "Eventet findes ikke" } } }
+      }
+    },
+    "schemas": {
+      "Event": {
+        "type": "object",
+        "required": ["id", "title", "date", "capacity", "participants"],
+        "properties": {
+          "id": { "type": "integer", "minimum": 1, "description": "Automatisk tildelt id.", "example": 1 },
+          "title": { "description": "Eventets titel, gemt som modtaget. Kun Python-truthiness valideres ved oprettelse.", "example": "Quizaften" },
+          "date": { "description": "Eventets dato, gemt som modtaget. Hverken datatype eller datoformat valideres.", "example": "2026-11-13" },
+          "capacity": { "type": "integer", "minimum": 1, "description": "Maksimalt antal deltagere.", "example": 3 },
+          "participants": { "type": "array", "description": "Tilmeldte navne i tilmeldingsrækkefølge. Elementerne gemmes som modtaget uden typevalidering.", "items": { "description": "Den værdi, der blev sendt som name." }, "example": ["Anna", "Bo"] }
+        },
+        "example": { "id": 1, "title": "Quizaften", "date": "2026-11-13", "capacity": 3, "participants": ["Anna", "Bo"] }
+      },
+      "CreateEvent": {
+        "type": "object",
+        "required": ["title", "date", "capacity"],
+        "properties": {
+          "title": { "description": "Skal være sand i Python. null, false, 0, tom tekst, tom liste og tomt objekt afvises; mellemrum accepteres.", "example": "Quizaften" },
+          "date": { "description": "Skal være sand i Python. Datotype og datoformat valideres ikke.", "example": "2026-11-13" },
+          "capacity": { "type": "integer", "minimum": 1, "description": "Skal have præcis Python-typen int og være større end 0. Boolean og JSON-tal som 3.0 afvises.", "example": 3 }
+        }
+      },
+      "Signup": {
+        "type": "object",
+        "required": ["name"],
+        "properties": {
+          "name": { "description": "Skal være sand i Python. Ingen typekontrol eller trimning. Dubletter sammenlignes med Python-lighed.", "example": "Anna" }
+        }
+      },
+      "Error": {
+        "type": "object",
+        "required": ["error"],
+        "properties": { "error": { "type": "string", "description": "Fejlbesked." } }
+      }
+    }
+  }
+}
